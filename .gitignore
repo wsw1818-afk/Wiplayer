@@ -1,0 +1,64 @@
+# Build results
+bin/
+obj/
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+!**/packages/repositories.config
+
+# FFmpeg binaries (download separately)
+src/Wiplayer.FFmpeg/ffmpeg/*.dll
+src/Wiplayer.FFmpeg/ffmpeg/*.exe
+
+# Logs
+*.log
+logs/
+
+# Test results
+TestResults/
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Local settings
+appsettings.local.json
+*.local.json
+
+# Windows reserved names
+nul
+
+# Publish standalone
+publish-standalone/
+
+# Installer output
+installer/output/

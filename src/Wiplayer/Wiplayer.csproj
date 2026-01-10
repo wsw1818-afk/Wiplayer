@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- <ApplicationIcon>Assets\icon.ico</ApplicationIcon> -->
+    <AssemblyName>Wiplayer</AssemblyName>
+    <RootNamespace>Wiplayer</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>Wiplayer Team</Authors>
+    <Description>Universal Media Player with FFmpeg support</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Wiplayer.Core\Wiplayer.Core.csproj" />
+    <ProjectReference Include="..\Wiplayer.FFmpeg\Wiplayer.FFmpeg.csproj" />
+    <ProjectReference Include="..\Wiplayer.Renderer\Wiplayer.Renderer.csproj" />
+    <ProjectReference Include="..\Wiplayer.Subtitle\Wiplayer.Subtitle.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
