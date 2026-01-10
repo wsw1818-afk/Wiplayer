@@ -62,3 +62,9 @@ publish-standalone/
 
 # Installer output
 installer/output/
+
+# Test media files
+test_media/
+
+# Local deploy folder
+wiplay/
