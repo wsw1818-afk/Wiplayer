@@ -13,6 +13,7 @@ public class VideoRenderer : IDisposable
     private bool _disposed = false;
     private readonly object _lock = new();
     private byte[]? _filterBuffer; // 필터용 재사용 버퍼
+    private byte[]? _clearBuffer;  // Clear용 재사용 버퍼
 
     /// <summary>현재 비트맵 (UI에 바인딩)</summary>
     public WriteableBitmap? Bitmap => _bitmap;
@@ -97,95 +98,112 @@ public class VideoRenderer : IDisposable
         if (_disposed || bgraData == null)
             return;
 
+        // 크기 체크 및 초기화
         lock (_lock)
         {
             if (width != Width || height != Height || _bitmap == null)
             {
                 Initialize(width, height);
             }
+        }
 
-            // 필터 적용
-            byte[] processedData = bgraData;
-            if (Brightness != 0 || Contrast != 0 || Saturation != 0)
-            {
-                processedData = ApplyFilters(bgraData, width, height);
-            }
+        // 필터 적용 (lock 외부에서 CPU 작업)
+        byte[] processedData = bgraData;
+        if (Brightness != 0 || Contrast != 0 || Saturation != 0)
+        {
+            processedData = ApplyFilters(bgraData, width, height);
+        }
 
-            Application.Current?.Dispatcher.Invoke(() =>
+        // 캡처용 로컬 변수
+        var dataToRender = processedData;
+        var w = width;
+        var h = height;
+
+        // 비동기 렌더링 (블로킹 제거)
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            lock (_lock)
             {
-                if (_bitmap == null) return;
+                if (_bitmap == null || _disposed) return;
 
                 _bitmap.Lock();
                 try
                 {
-                    var rect = new Int32Rect(0, 0, width, height);
-                    var stride = width * 4;
-                    _bitmap.WritePixels(rect, processedData, stride, 0);
+                    var rect = new Int32Rect(0, 0, w, h);
+                    var stride = w * 4;
+                    _bitmap.WritePixels(rect, dataToRender, stride, 0);
                 }
                 finally
                 {
                     _bitmap.Unlock();
                 }
-            });
+            }
 
             FrameRendered?.Invoke(this, EventArgs.Empty);
-        }
+        }, System.Windows.Threading.DispatcherPriority.Render);
     }
 
     /// <summary>
-    /// 밝기/대비/채도 필터 적용
+    /// 밝기/대비/채도 필터 적용 (unsafe 최적화)
     /// </summary>
-    private byte[] ApplyFilters(byte[] bgraData, int width, int height)
+    private unsafe byte[] ApplyFilters(byte[] bgraData, int width, int height)
     {
         // 버퍼 재사용 (GC 압력 감소)
         if (_filterBuffer == null || _filterBuffer.Length != bgraData.Length)
         {
             _filterBuffer = new byte[bgraData.Length];
         }
-        var result = _filterBuffer;
 
-        // 대비 계수 계산 (0.5 ~ 2.0 범위)
-        double contrastFactor = (100.0 + Contrast) / 100.0;
-        contrastFactor = contrastFactor * contrastFactor; // 비선형 적용
+        // 정수 연산으로 변환 (256 스케일)
+        int brightnessOffset = (Brightness * 255) / 100;
+        int contrastFactor256 = (int)(((100.0 + Contrast) / 100.0) * ((100.0 + Contrast) / 100.0) * 256);
+        int saturationFactor256 = (int)(((100.0 + Saturation) / 100.0) * 256);
+        bool applySaturation = Saturation != 0;
 
-        // 채도 계수 계산 (0.0 ~ 2.0 범위)
-        double saturationFactor = (100.0 + Saturation) / 100.0;
-
-        for (int i = 0; i < bgraData.Length; i += 4)
+        fixed (byte* srcPtr = bgraData, dstPtr = _filterBuffer)
         {
-            // BGRA 순서
-            double b = bgraData[i];
-            double g = bgraData[i + 1];
-            double r = bgraData[i + 2];
-            byte a = bgraData[i + 3];
+            byte* src = srcPtr;
+            byte* dst = dstPtr;
+            byte* end = srcPtr + bgraData.Length;
 
-            // 1. 밝기 적용
-            r += Brightness * 2.55;
-            g += Brightness * 2.55;
-            b += Brightness * 2.55;
-
-            // 2. 대비 적용
-            r = ((r - 128) * contrastFactor) + 128;
-            g = ((g - 128) * contrastFactor) + 128;
-            b = ((b - 128) * contrastFactor) + 128;
-
-            // 3. 채도 적용 (HSL 변환 없이 간단한 방법)
-            if (Saturation != 0)
+            while (src < end)
             {
-                double gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                r = gray + (r - gray) * saturationFactor;
-                g = gray + (g - gray) * saturationFactor;
-                b = gray + (b - gray) * saturationFactor;
-            }
+                int b = src[0];
+                int g = src[1];
+                int r = src[2];
+                byte a = src[3];
 
-            // 클램핑
-            result[i] = (byte)Math.Clamp(b, 0, 255);
-            result[i + 1] = (byte)Math.Clamp(g, 0, 255);
-            result[i + 2] = (byte)Math.Clamp(r, 0, 255);
-            result[i + 3] = a;
+                // 1. 밝기 적용
+                r += brightnessOffset;
+                g += brightnessOffset;
+                b += brightnessOffset;
+
+                // 2. 대비 적용 (정수 연산)
+                r = (((r - 128) * contrastFactor256) >> 8) + 128;
+                g = (((g - 128) * contrastFactor256) >> 8) + 128;
+                b = (((b - 128) * contrastFactor256) >> 8) + 128;
+
+                // 3. 채도 적용
+                if (applySaturation)
+                {
+                    int gray = (r * 77 + g * 150 + b * 29) >> 8; // 0.299, 0.587, 0.114
+                    r = gray + (((r - gray) * saturationFactor256) >> 8);
+                    g = gray + (((g - gray) * saturationFactor256) >> 8);
+                    b = gray + (((b - gray) * saturationFactor256) >> 8);
+                }
+
+                // 클램핑 (분기 없는 버전)
+                dst[0] = (byte)(b < 0 ? 0 : (b > 255 ? 255 : b));
+                dst[1] = (byte)(g < 0 ? 0 : (g > 255 ? 255 : g));
+                dst[2] = (byte)(r < 0 ? 0 : (r > 255 ? 255 : r));
+                dst[3] = a;
+
+                src += 4;
+                dst += 4;
+            }
         }
 
-        return result;
+        return _filterBuffer;
     }
 
     /// <summary>
@@ -195,20 +213,35 @@ public class VideoRenderer : IDisposable
     {
         if (_bitmap == null) return;
 
-        Application.Current?.Dispatcher.Invoke(() =>
+        // 버퍼 재사용
+        int requiredSize = Width * Height * 4;
+        if (_clearBuffer == null || _clearBuffer.Length != requiredSize)
         {
-            _bitmap.Lock();
-            try
+            _clearBuffer = new byte[requiredSize]; // 0으로 자동 초기화
+        }
+
+        var w = Width;
+        var h = Height;
+        var buffer = _clearBuffer;
+
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            lock (_lock)
             {
-                var blackData = new byte[Width * Height * 4];
-                var rect = new Int32Rect(0, 0, Width, Height);
-                _bitmap.WritePixels(rect, blackData, Width * 4, 0);
+                if (_bitmap == null) return;
+
+                _bitmap.Lock();
+                try
+                {
+                    var rect = new Int32Rect(0, 0, w, h);
+                    _bitmap.WritePixels(rect, buffer, w * 4, 0);
+                }
+                finally
+                {
+                    _bitmap.Unlock();
+                }
             }
-            finally
-            {
-                _bitmap.Unlock();
-            }
-        });
+        }, System.Windows.Threading.DispatcherPriority.Normal);
     }
 
     public void Dispose()

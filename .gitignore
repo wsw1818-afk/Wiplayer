@@ -57,8 +57,9 @@ appsettings.local.json
 # Windows reserved names
 nul
 
-# Publish standalone
+# Publish folders
 publish-standalone/
+publish-framework/
 
 # Installer output
 installer/output/

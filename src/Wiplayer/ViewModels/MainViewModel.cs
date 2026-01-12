@@ -700,15 +700,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // 시간 포맷 캐시 (1시간 = 3600초, 메모리 할당 제거)
+    private static readonly string[] _timeFormatCache;
+    static MainViewModel()
+    {
+        _timeFormatCache = new string[3600];
+        for (int i = 0; i < 3600; i++)
+        {
+            int m = i / 60;
+            int s = i % 60;
+            _timeFormatCache[i] = $"{m:D2}:{s:D2}";
+        }
+    }
+
     private static string FormatTime(double seconds)
     {
         if (seconds <= 0 || double.IsNaN(seconds) || double.IsInfinity(seconds))
             return "00:00";
 
-        var ts = TimeSpan.FromSeconds(seconds);
-        return ts.Hours > 0
-            ? $"{ts.Hours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
-            : $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+        int intSec = (int)seconds;
+
+        // 1시간 미만: 캐시 사용
+        if (intSec < 3600)
+            return _timeFormatCache[intSec];
+
+        // 1시간 이상: 직접 계산
+        int h = intSec / 3600;
+        int m = (intSec % 3600) / 60;
+        int s = intSec % 60;
+        return $"{h}:{m:D2}:{s:D2}";
     }
 
     // 멀티뷰 관련 명령

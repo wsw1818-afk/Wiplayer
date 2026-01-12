@@ -5,7 +5,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Wiplayer"
 #define MyAppExeName "Wiplayer.exe"
-#define MyAppSourceDir "..\src\Wiplayer\publish-standalone"
+#define MyAppSourceDir "..\src\Wiplayer\publish-framework"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}

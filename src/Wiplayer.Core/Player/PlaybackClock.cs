@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Wiplayer.Core.Player;
 
 /// <summary>
-/// 재생 시계 - A/V 동기화를 위한 마스터 클럭
+/// 재생 시계 - A/V 동기화를 위한 마스터 클럭 (lock 최적화)
 /// </summary>
 public class PlaybackClock
 {
@@ -12,25 +12,31 @@ public class PlaybackClock
     private double _playbackSpeed = 1.0;
     private readonly object _lock = new();
 
-    /// <summary>현재 재생 시간 (초)</summary>
+    /// <summary>현재 재생 시간 (초) - 읽기 최적화</summary>
     public double CurrentTime
     {
         get
         {
+            // Stopwatch.Elapsed는 thread-safe
+            if (!_stopwatch.IsRunning)
+            {
+                lock (_lock) { return _baseTime; }
+            }
+
+            double baseTime, speed;
             lock (_lock)
             {
-                if (!_stopwatch.IsRunning)
-                    return _baseTime;
-
-                return _baseTime + (_stopwatch.Elapsed.TotalSeconds * _playbackSpeed);
+                baseTime = _baseTime;
+                speed = _playbackSpeed;
             }
+            return baseTime + (_stopwatch.Elapsed.TotalSeconds * speed);
         }
     }
 
     /// <summary>재생 속도 (0.2x ~ 4.0x)</summary>
     public double PlaybackSpeed
     {
-        get => _playbackSpeed;
+        get { lock (_lock) { return _playbackSpeed; } }
         set
         {
             lock (_lock)

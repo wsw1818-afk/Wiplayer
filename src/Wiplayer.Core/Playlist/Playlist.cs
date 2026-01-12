@@ -243,7 +243,17 @@ public class Playlist
         if (_shuffleOrder != null && _shuffleOrder.Count == _items.Count)
             return;
 
-        _shuffleOrder = Enumerable.Range(0, _items.Count).OrderBy(_ => _random.Next()).ToList();
+        // Fisher-Yates 셔플 (단일 할당, O(n) 성능)
+        _shuffleOrder = new List<int>(_items.Count);
+        for (int i = 0; i < _items.Count; i++)
+            _shuffleOrder.Add(i);
+
+        for (int i = _shuffleOrder.Count - 1; i > 0; i--)
+        {
+            int j = _random.Next(i + 1);
+            (_shuffleOrder[i], _shuffleOrder[j]) = (_shuffleOrder[j], _shuffleOrder[i]);
+        }
+
         _shuffleIndex = _currentIndex >= 0 ? _shuffleOrder.IndexOf(_currentIndex) : -1;
     }
 
@@ -257,8 +267,12 @@ public class Playlist
         {
             if (RepeatMode == RepeatMode.All)
             {
-                // 다시 섞기
-                _shuffleOrder = Enumerable.Range(0, _items.Count).OrderBy(_ => _random.Next()).ToList();
+                // 다시 섞기 (Fisher-Yates)
+                for (int i = _shuffleOrder.Count - 1; i > 0; i--)
+                {
+                    int j = _random.Next(i + 1);
+                    (_shuffleOrder[i], _shuffleOrder[j]) = (_shuffleOrder[j], _shuffleOrder[i]);
+                }
                 nextShuffleIndex = 0;
             }
             else
